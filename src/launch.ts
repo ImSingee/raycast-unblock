@@ -2,7 +2,6 @@ import process from 'node:process'
 import Fastify from 'fastify'
 import consola from 'consola'
 import { FastifySSEPlugin } from 'fastify-sse-v2'
-import fastifyCompress from '@fastify/compress'
 import packageJson from '../package.json'
 import { MeRoute } from './routes/me'
 import { httpClient } from './utils'
@@ -13,7 +12,7 @@ import { getConfig } from './utils/env.util'
 
 const prefix = '/api/v1'
 
-export async function launch() {
+export function launch() {
   const config = getConfig('general')
   const fastify = Fastify({ logger: config?.logger || false })
   fastify.register(FastifySSEPlugin)
@@ -21,10 +20,6 @@ export async function launch() {
   fastify.register(MeRoute, { prefix: `${prefix}/me` })
   fastify.register(AIRoute, { prefix: `${prefix}/ai` })
   fastify.register(TranslationsRoute, { prefix: `${prefix}/translations` })
-
-  await fastify.register(fastifyCompress, {
-    global: true,
-  })
 
   fastify.get('/', async (_request, _reply) => {
     return {
@@ -56,13 +51,14 @@ export async function launch() {
     })
     Debug.info(`[GET] ${subUrl} <-- 托底策略 <-- Backend Response`)
 
-    const headers = Object.fromEntries(backendResponse.headers.entries())
-    delete headers['content-encoding']
+    const responseHeaders = new Headers(backendResponse.headers)
+    responseHeaders.delete('content-encoding')
 
-    const bodyBuffer = await backendResponse.arrayBuffer()
-    const bodyArray = new Uint8Array(bodyBuffer)
-
-    return reply.status(backendResponse.status).headers(headers).send(bodyArray)
+    return reply.send(new Response(backendResponse.body, {
+      status: backendResponse.status,
+      statusText: backendResponse.statusText,
+      headers: responseHeaders,
+    }))
   })
 
   consola.info(`Raycast Unblock`)
